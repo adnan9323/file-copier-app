@@ -1,29 +1,50 @@
 # streamlit_login_api.py
-
 import streamlit as st
+import pandas as pd
 
-# --- Hardcoded Users ---
-USERS = {
-    "admin": {"password": "admin123", "role": "admin"},
-    "user1": {"password": "user123", "role": "user"},
-    "ammar": {"password": "secret", "role": "user"},
-}
+# Load user credentials from Excel
+@st.cache_data
+def load_credentials():
+    try:
+        df = pd.read_excel("credentials.xlsx")
+        df["username"] = df["username"].astype(str)
+        df["password"] = df["password"].astype(str)
+        return df
+    except Exception as e:
+        st.error("Error loading credentials file.")
+        st.stop()
 
-# --- Streamlit Setup ---
-st.set_page_config(page_title="Login API")
-st.title("🔐 Streamlit Login API")
-st.write("This is a simulated login API for desktop applications.")
-
-# ✅ Use new method
+# API-like behavior for desktop app
 query_params = st.query_params
-username = query_params.get("username", "")
-password = query_params.get("password", "")
+username = query_params.get("username", [""])[0]
+password = query_params.get("password", [""])[0]
 
-# --- Login Logic ---
+st.set_page_config(page_title="Streamlit Login API", layout="centered")
+st.title("🔐 Streamlit Login API")
+
+# If called from desktop app with parameters
 if username and password:
-    if username in USERS and USERS[username]["password"] == password:
-        st.json({"success": True, "user": username, "role": USERS[username]["role"]})
+    df = load_credentials()
+    match = df[(df["username"] == username) & (df["password"] == password)]
+    
+    if not match.empty:
+        user_data = match.iloc[0]
+        st.json({
+            "success": True,
+            "username": user_data["username"],
+            "role": user_data["role"]
+        })
     else:
         st.json({"success": False, "error": "Invalid credentials"})
 else:
-    st.info("Pass `?username=yourname&password=yourpass` in the URL.")
+    st.markdown("""
+        ### 🚀 Usage:
+        Append credentials to URL like this:
+        
+        ```
+        ?username=admin&password=admin123
+        ```
+        
+        Example:
+        [Try Now](?username=admin&password=admin123)
+    """)
