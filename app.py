@@ -9,20 +9,21 @@ USERS = {
     "ammar": {"password": "secret", "role": "user"},
 }
 
-# --- Streamlit App ---
+# --- Streamlit Setup ---
 st.set_page_config(page_title="Login API")
 st.title("🔐 Streamlit Login API")
 st.write("This is a simulated login API for desktop applications.")
 
-# ✅ Updated method to get query params
+# ✅ Use new method
 query_params = st.query_params
 username = query_params.get("username", "")
 password = query_params.get("password", "")
 
+# --- Login Logic ---
 if username and password:
     if username in USERS and USERS[username]["password"] == password:
         st.json({"success": True, "user": username, "role": USERS[username]["role"]})
     else:
         st.json({"success": False, "error": "Invalid credentials"})
 else:
-    st.info("Pass `?username=yourname&password=yourpass` in URL.")
+    st.info("Pass `?username=yourname&password=yourpass` in the URL.")
