@@ -1,7 +1,6 @@
 # streamlit_login_api.py
 
 import streamlit as st
-import json
 
 # --- Hardcoded Users ---
 USERS = {
@@ -10,16 +9,15 @@ USERS = {
     "ammar": {"password": "secret", "role": "user"},
 }
 
-# API Simulation
+# --- Streamlit App ---
 st.set_page_config(page_title="Login API")
-
 st.title("🔐 Streamlit Login API")
 st.write("This is a simulated login API for desktop applications.")
 
-# Accept GET or POST from the desktop app
-query_params = st.experimental_get_query_params()
-username = query_params.get("username", [""])[0]
-password = query_params.get("password", [""])[0]
+# ✅ Updated method to get query params
+query_params = st.query_params
+username = query_params.get("username", "")
+password = query_params.get("password", "")
 
 if username and password:
     if username in USERS and USERS[username]["password"] == password:
