@@ -1,64 +1,101 @@
-import os
-import shutil
-import fnmatch
+# streamlit_admin_portal.py
+
 import streamlit as st
+import pandas as pd
+import requests
+import json
 
-def copy_files(file_list, source_dir, destination_dir):
-    log = []
+# Simulated database (in memory for now)
+# You should replace this with a real database like Firebase, Supabase, or a Google Sheet
+@st.cache_data
 
-    if not os.path.exists(destination_dir):
-        os.makedirs(destination_dir)
+def load_users():
+    return pd.DataFrame([
+        {"username": "admin", "password": "admin123", "role": "admin"},
+        {"username": "user1", "password": "user123", "role": "user"}
+    ])
 
-    for pattern in file_list:
-        pattern = pattern.strip()
-        if not pattern:
-            continue
+# Save to session for changes during interaction
+if "users" not in st.session_state:
+    st.session_state.users = load_users()
 
-        pattern_lower = pattern.lower()
-        found = False
+# Function to check login
 
-        for root, dirs, files in os.walk(source_dir):
-            for file_name in files:
-                file_name_lower = file_name.lower()
+def login(username, password):
+    df = st.session_state.users
+    user = df[(df["username"] == username) & (df["password"] == password)]
+    if not user.empty:
+        return user.iloc[0].to_dict()
+    return None
 
-                if fnmatch.fnmatch(file_name_lower, f"*{pattern_lower}*.pdf") or fnmatch.fnmatch(file_name_lower, f"*{pattern_lower}*.dwg"):
-                    found = True
-                    relative_path = os.path.relpath(root, source_dir)
-                    destination_folder = os.path.join(destination_dir, relative_path)
-                    if not os.path.exists(destination_folder):
-                        os.makedirs(destination_folder)
+# Function to add a new user
 
-                    source_file_path = os.path.join(root, file_name)
-                    destination_file_path = os.path.join(destination_folder, file_name)
+def add_user(username, password, role):
+    st.session_state.users = pd.concat([
+        st.session_state.users,
+        pd.DataFrame([{"username": username, "password": password, "role": role}])
+    ], ignore_index=True)
 
-                    shutil.copy(source_file_path, destination_folder)
-                    log.append(f"✅ Copied: `{file_name}` to `{destination_folder}`")
+# Function to delete a user
 
-        if not found:
-            log.append(f"❌ File not found for pattern: `{pattern}`")
-
-    return log
-
+def delete_user(username):
+    st.session_state.users = st.session_state.users[st.session_state.users.username != username]
 
 # --- Streamlit UI ---
+st.set_page_config(page_title="Admin Portal", layout="centered")
+st.title("🔐 User Management Portal")
 
-st.set_page_config(page_title="File Copier App", layout="centered")
-st.title("📁 PDF/DWG File Sorter & Copier Tool")
-st.markdown("Enter file name patterns to search and copy matching files (.pdf / .dwg) from a source to a destination folder.")
+# --- Login Section ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
 
-file_input = st.text_area("🔍 File name patterns (one per line):", height=150)
-file_patterns = [p.strip() for p in file_input.splitlines() if p.strip()]
+if not st.session_state.logged_in:
+    st.subheader("🔑 Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
 
-source_dir = st.text_input("📂 Source Folder Path", value=r"\\192.168.10.2\rbi\...")
-destination_dir = st.text_input("📥 Destination Folder Path", value=r"\\192.168.10.2\rbi\...")
+    if st.button("Login"):
+        user = login(username, password)
+        if user:
+            st.success(f"Welcome {user['username']}")
+            st.session_state.logged_in = True
+            st.session_state.current_user = user
+        else:
+            st.error("Invalid credentials")
 
-if st.button("🚀 Run File Copy"):
-    if not file_patterns or not source_dir or not destination_dir:
-        st.warning("⚠️ Please fill in all fields before running.")
+# --- Admin Panel ---
+else:
+    user = st.session_state.current_user
+    st.write(f"👋 Logged in as **{user['username']}**")
+
+    if user['role'] == 'admin':
+        st.subheader("👤 Add New User")
+        new_username = st.text_input("New Username")
+        new_password = st.text_input("New Password", type="password")
+        new_role = st.selectbox("Role", ["user", "admin"])
+
+        if st.button("➕ Add User"):
+            if new_username and new_password:
+                add_user(new_username, new_password, new_role)
+                st.success("User added successfully")
+            else:
+                st.warning("Username and password cannot be empty")
+
+        st.divider()
+        st.subheader("📋 Existing Users")
+        df_users = st.session_state.users
+        st.dataframe(df_users.drop("password", axis=1), use_container_width=True)
+
+        del_user = st.selectbox("Select user to delete", df_users[df_users.username != 'admin'].username.unique())
+        if st.button("🗑️ Delete User"):
+            delete_user(del_user)
+            st.success(f"User '{del_user}' deleted")
+
     else:
-        with st.spinner("🔄 Copying files..."):
-            result_log = copy_files(file_patterns, source_dir, destination_dir)
-            st.success("✅ Copy process completed.")
-            st.write("### 🧾 Results Log:")
-            for log in result_log:
-                st.write(log)
+        st.info("You are logged in as a regular user. No admin privileges.")
+
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.current_user = None
+        st.experimental_rerun()
